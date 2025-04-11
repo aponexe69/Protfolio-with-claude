@@ -8,14 +8,21 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
-// Parallax Effect
+// Improved Parallax Effect with throttling
+let lastScrollTime = 0;
+const scrollThreshold = 16; // ~60fps
+
 window.addEventListener('scroll', () => {
+    const now = Date.now();
+    if (now - lastScrollTime < scrollThreshold) return;
+    lastScrollTime = now;
+
     const parallaxElements = document.querySelectorAll('.floating-element, .floating-3d-element');
+    const scrolled = window.pageYOffset;
+    
     parallaxElements.forEach(el => {
         const speed = 0.5;
-        const rect = el.getBoundingClientRect();
-        const scrolled = window.pageYOffset;
-        
+        // No need to calculate getBoundingClientRect() on scroll
         el.style.transform = `translateY(${scrolled * speed}px)`;
     });
 });
@@ -68,20 +75,32 @@ document.querySelectorAll('section').forEach(section => {
     observer.observe(section);
 });
 
-// Three.js 3D Background
+// Optimized Three.js 3D Background
 const initThreeBackground = () => {
+    // Check if device is low-end (mobile or tablet)
+    const isLowEndDevice = window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer({ alpha: true });
+    
+    // Use alpha: true for transparent background, but it's more expensive
+    const renderer = new THREE.WebGLRenderer({ 
+        alpha: true,
+        antialias: false, // Disable antialiasing for better performance
+        powerPreference: 'high-performance'
+    });
     
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.querySelector('.hero').appendChild(renderer.domElement);
+    
+    // Reduce number of particles on low-end devices
+    const particleCount = isLowEndDevice ? 1000 : 5000;
     
     // Create particles
     const geometry = new THREE.BufferGeometry();
     const vertices = [];
     
-    for (let i = 0; i < 5000; i++) {
+    for (let i = 0; i < particleCount; i++) {
         vertices.push(
             Math.random() * 2000 - 1000,
             Math.random() * 2000 - 1000,
@@ -93,9 +112,10 @@ const initThreeBackground = () => {
     
     const material = new THREE.PointsMaterial({
         color: 0x64ffda,
-        size: 2,
+        size: isLowEndDevice ? 3 : 2, // Larger size but fewer particles on mobile
         transparent: true,
-        opacity: 0.8
+        opacity: 0.8,
+        sizeAttenuation: false // Disable size attenuation for better performance
     });
     
     const particles = new THREE.Points(geometry, material);
@@ -103,24 +123,46 @@ const initThreeBackground = () => {
     
     camera.position.z = 1000;
     
-    // Animation
-    const animate = () => {
+    // Variable to control animation frame rate
+    let lastFrame = 0;
+    const frameInterval = isLowEndDevice ? 50 : 16; // Limit to ~20fps on mobile, ~60fps on desktop
+    
+    // Animation with throttling for low-end devices
+    const animate = (timestamp) => {
         requestAnimationFrame(animate);
         
-        particles.rotation.x += 0.0005;
-        particles.rotation.y += 0.0005;
+        // Throttle frame rate
+        if (timestamp - lastFrame < frameInterval) return;
+        lastFrame = timestamp;
+        
+        // Slower rotation on low-end devices
+        particles.rotation.x += isLowEndDevice ? 0.0002 : 0.0005;
+        particles.rotation.y += isLowEndDevice ? 0.0002 : 0.0005;
         
         renderer.render(scene, camera);
     };
     
-    animate();
+    animate(0);
     
-    // Handle window resize
+    // Efficient resize handler with debouncing
+    let resizeTimeout;
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, 250);
     });
+    
+    // Add a method to dispose resources when not in viewport
+    return {
+        dispose: () => {
+            geometry.dispose();
+            material.dispose();
+            renderer.dispose();
+        }
+    };
 };
 
 // Initialize Three.js background when the page loads
@@ -151,14 +193,17 @@ const revealOnScroll = () => {
     }
 };
 
-// Parallax effect for about section
+// Optimize Parallax effect for about section
 const handleParallax = () => {
-    const scrollPosition = window.pageYOffset;
-    const aboutContent = document.querySelector('.about-content');
-    
-    if (aboutContent) {
-        aboutContent.style.transform = `translateY(${scrollPosition * 0.1}px)`;
-    }
+    // Using requestAnimationFrame for smoother performance
+    requestAnimationFrame(() => {
+        const scrollPosition = window.pageYOffset;
+        const aboutContent = document.querySelector('.about-content');
+        
+        if (aboutContent) {
+            aboutContent.style.transform = `translateY(${scrollPosition * 0.05}px)`; // Reduced parallax intensity
+        }
+    });
 };
 
 // Mouse move effect for skills
@@ -183,27 +228,29 @@ skills.forEach(skill => {
     });
 });
 
+// Optimize scroll event listeners with throttling
+let isScrolling = false;
 window.addEventListener('scroll', () => {
-    revealOnScroll();
-    handleParallax();
-});
-
-window.addEventListener('load', () => {
-    revealOnScroll();
-    handleParallax();
+    if (!isScrolling) {
+        isScrolling = true;
+        window.requestAnimationFrame(() => {
+            revealOnScroll();
+            handleParallax();
+            
+            // Show the button when the user scrolls down 300px from the top
+            if (window.scrollY > 300) {
+                scrollTopBtn.classList.add('visible');
+            } else {
+                scrollTopBtn.classList.remove('visible');
+            }
+            
+            isScrolling = false;
+        });
+    }
 });
 
 // Get the scroll-to-top button
 const scrollTopBtn = document.querySelector('.scroll-top');
-
-// Show the button when the user scrolls down 300px from the top
-window.addEventListener('scroll', () => {
-    if (window.scrollY > 300) {
-        scrollTopBtn.classList.add('visible');
-    } else {
-        scrollTopBtn.classList.remove('visible');
-    }
-});
 
 // Add scroll to top functionality
 scrollTopBtn.addEventListener('click', (e) => {
@@ -237,7 +284,7 @@ sideButtons.forEach(button => {
 // Section transitions
 const sections = document.querySelectorAll('.section-transition');
 
-// Enhanced Intersection Observer for sections
+// Only run heavy animations when in viewport
 const sectionObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -251,25 +298,20 @@ const sectionObserver = new IntersectionObserver((entries) => {
             } else if (entry.target.classList.contains('contact')) {
                 entry.target.classList.add('in-view');
             }
-        } else {
-            // Optional: remove classes when section is not in view for replay of animations
-            // Uncomment the following lines if you want animations to replay each time
-            /*
-            entry.target.classList.remove('active');
-            if (entry.target.classList.contains('about')) {
-                entry.target.classList.remove('in-view');
-            } else if (entry.target.classList.contains('work')) {
-                entry.target.classList.remove('in-view');
-            } else if (entry.target.classList.contains('contact')) {
-                entry.target.classList.remove('in-view');
+            
+            // Enable animations when in view
+            if (entry.target.classList.contains('hero') && !entry.target.hasAttribute('data-animated')) {
+                entry.target.setAttribute('data-animated', 'true');
             }
-            */
+        } else {
+            // Optionally disable heavy animations when out of view
+            // This is a more aggressive optimization
+            if (entry.target.classList.contains('hero') && entry.target.hasAttribute('data-animated')) {
+                // Could pause animations here for extreme optimization
+            }
         }
     });
-}, {
-    threshold: 0.15, // Trigger when 15% of the section is visible
-    rootMargin: '-50px 0px'
-});
+}, { threshold: 0.1 });
 
 // Observe all sections
 sections.forEach(section => {
@@ -851,203 +893,143 @@ function typeText(element, text) {
     type();
 }
 
-// Rainbow Swirl Cursor Effect
+// Rainbow Swirl Cursor Effect - Commented out to remove functionality
+/*
 function initRainbowCursorEffect() {
+    // Check if device is mobile/tablet - disable on touch devices
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+    if (isTouchDevice) {
+        // Hide cursor elements on touch devices
+        const cursorElements = document.querySelectorAll('.cursor, .cursor-follower');
+        cursorElements.forEach(el => {
+            el.style.display = 'none';
+        });
+        return; // Exit early
+    }
+    
     const cursor = document.querySelector('.cursor');
     const cursorFollower = document.querySelector('.cursor-follower');
-    const body = document.body;
     
-    // Create container for cursor trails
-    const trailContainer = document.createElement('div');
-    trailContainer.className = 'trail-container';
-    body.appendChild(trailContainer);
-    
-    // Create container for cursor swirls
-    const swirlContainer = document.createElement('div');
-    swirlContainer.className = 'swirl-container';
-    body.appendChild(swirlContainer);
-    
-    // Variables for trail effect
     let mouseX = 0;
     let mouseY = 0;
-    let trailPositions = [];
-    const trailLength = 20; // number of trail elements
-    const trailInterval = 2; // interval between trail creation
-    let frameCount = 0;
+    let cursorX = 0;
+    let cursorY = 0;
+    let followerX = 0;
+    let followerY = 0;
     
-    // Array of rainbow colors
-    const rainbowColors = [
-        '#FF0080', // Pink
-        '#FF3D00', // Orange-Red
-        '#FFEA00', // Yellow
-        '#00FF9D', // Green
-        '#00B8FF', // Blue
-        '#7B1FA2'  // Purple
-    ];
-
-    // Mouse move handler with optimization using requestAnimationFrame
-    let lastMouseMoveEvent = null;
-    let isMouseMoving = false;
-    let rafId = null;
+    // For speed calculation
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+    let speedX = 0;
+    let speedY = 0;
+    let lastSpeedUpdateTime = 0;
+    
+    // For trail
+    const trailElements = [];
+    const MAX_TRAIL_ELEMENTS = 10; // Reduced from original value
+    let trailUpdateCounter = 0;
+    const TRAIL_UPDATE_FREQUENCY = 3; // Only create new trail every 3 mouse moves
+    
+    // Throttle mouse move handler
+    let lastMouseMoveTime = 0;
+    const MOUSE_MOVE_THROTTLE = 16; // ~60fps
+    
+    function updateCursorPosition() {
+        // Smooth follow with easing
+        cursorX += (mouseX - cursorX) * 0.2;
+        cursorY += (mouseY - cursorY) * 0.2;
+        followerX += (mouseX - followerX) * 0.1;
+        followerY += (mouseY - followerY) * 0.1;
+        
+        cursor.style.transform = `translate3d(${cursorX}px, ${cursorY}px, 0) translate(-50%, -50%)`;
+        cursorFollower.style.transform = `translate3d(${followerX}px, ${followerY}px, 0) translate(-50%, -50%)`;
+        
+        requestAnimationFrame(updateCursorPosition);
+    }
     
     document.addEventListener('mousemove', (e) => {
-        lastMouseMoveEvent = e;
-        isMouseMoving = true;
+        const now = Date.now();
+        if (now - lastMouseMoveTime < MOUSE_MOVE_THROTTLE) return;
+        lastMouseMoveTime = now;
         
-        if (!rafId) {
-            rafId = requestAnimationFrame(updateCursorPosition);
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        
+        // Only create trail when moving fast and not too frequently
+        calculateMouseSpeed();
+        if (isMovingFast() && trailUpdateCounter++ % TRAIL_UPDATE_FREQUENCY === 0) {
+            createTrailElement();
         }
     });
     
-    function updateCursorPosition() {
-        if (lastMouseMoveEvent) {
-            mouseX = lastMouseMoveEvent.clientX;
-            mouseY = lastMouseMoveEvent.clientY;
-            
-            // Update main cursor position
-            cursor.style.left = mouseX + 'px';
-            cursor.style.top = mouseY + 'px';
-            
-            // Update follower with slight delay
-            setTimeout(() => {
-                cursorFollower.style.left = mouseX + 'px';
-                cursorFollower.style.top = mouseY + 'px';
-            }, 50);
-            
-            // Store positions for trail
-            trailPositions.push({ x: mouseX, y: mouseY });
-            
-            // Create trail elements based on interval
-            frameCount++;
-            if (frameCount % trailInterval === 0) {
-                createTrailElement();
-            }
-            
-            // Create swirl effect when mouse moves quickly
-            if (isMovingFast()) {
-                createSwirlEffect();
-            }
-            
-            // Limit trail array length
-            if (trailPositions.length > 100) {
-                trailPositions.shift();
-            }
-        }
-        
-        rafId = isMouseMoving ? requestAnimationFrame(updateCursorPosition) : null;
-        isMouseMoving = false;
-    }
-    
-    // Calculate mouse speed
-    let prevX = 0;
-    let prevY = 0;
-    let mouseSpeed = 0;
-    
     function calculateMouseSpeed() {
-        if (trailPositions.length >= 2) {
-            const latest = trailPositions[trailPositions.length - 1];
-            const prev = trailPositions[trailPositions.length - 2] || { x: prevX, y: prevY };
-            
-            const dx = latest.x - prev.x;
-            const dy = latest.y - prev.y;
-            
-            mouseSpeed = Math.sqrt(dx * dx + dy * dy);
-            
-            prevX = latest.x;
-            prevY = latest.y;
+        const now = Date.now();
+        if (now - lastSpeedUpdateTime > 50) { // Update speed every 50ms
+            speedX = mouseX - prevMouseX;
+            speedY = mouseY - prevMouseY;
+            prevMouseX = mouseX;
+            prevMouseY = mouseY;
+            lastSpeedUpdateTime = now;
         }
-        
-        return mouseSpeed;
     }
     
     function isMovingFast() {
-        return calculateMouseSpeed() > 20; // threshold for "fast" movement
+        return Math.abs(speedX) + Math.abs(speedY) > 10;
     }
     
-    // Create trail elements
     function createTrailElement() {
-        if (trailPositions.length === 0) return;
+        // Manage trail elements count - remove oldest if at max
+        if (trailElements.length >= MAX_TRAIL_ELEMENTS) {
+            if (trailElements[0] && trailElements[0].parentNode) {
+                trailElements[0].parentNode.removeChild(trailElements[0]);
+            }
+            trailElements.shift();
+        }
         
-        const position = trailPositions[trailPositions.length - 1];
         const trail = document.createElement('div');
         trail.className = 'rainbow-cursor-trail';
+        trail.style.left = `${mouseX}px`;
+        trail.style.top = `${mouseY}px`;
         
-        // Get random rainbow color
-        const colorIndex = Math.floor(Math.random() * rainbowColors.length);
-        trail.style.background = rainbowColors[colorIndex];
+        // Generate rainbow colors with less saturation and opacity
+        const hue = Math.floor(Math.random() * 360);
+        trail.style.backgroundColor = `hsla(${hue}, 80%, 60%, 0.6)`;
         
-        // Position the trail element
-        trail.style.left = position.x + 'px';
-        trail.style.top = position.y + 'px';
+        document.body.appendChild(trail);
+        trailElements.push(trail);
         
-        // Size based on mouse speed
-        const speed = calculateMouseSpeed();
-        const size = Math.min(10, 4 + speed / 10);
-        trail.style.width = size + 'px';
-        trail.style.height = size + 'px';
-        
-        trailContainer.appendChild(trail);
-        
-        // Remove trail element after animation completes
+        // Remove the element after animation completes
         setTimeout(() => {
-            if (trail.parentNode === trailContainer) {
-                trailContainer.removeChild(trail);
+            if (trail.parentNode) {
+                trail.parentNode.removeChild(trail);
             }
-        }, 1000);
+            const index = trailElements.indexOf(trail);
+            if (index > -1) {
+                trailElements.splice(index, 1);
+            }
+        }, 800); // Match with CSS animation duration
     }
     
-    // Create swirl effect
-    function createSwirlEffect() {
-        if (trailPositions.length === 0) return;
-        
-        const position = trailPositions[trailPositions.length - 1];
-        const swirl = document.createElement('div');
-        swirl.className = 'cursor-swirl';
-        
-        // Position the swirl element
-        swirl.style.left = position.x + 'px';
-        swirl.style.top = position.y + 'px';
-        
-        swirlContainer.appendChild(swirl);
-        
-        // Remove swirl element after animation completes
-        setTimeout(() => {
-            if (swirl.parentNode === swirlContainer) {
-                swirlContainer.removeChild(swirl);
-            }
-        }, 2000);
-    }
+    // Start cursor positioning animation
+    updateCursorPosition();
     
-    // Add enhanced hover effect for interactive elements
-    const interactiveElements = document.querySelectorAll('a, button, .project-card, .skill');
-    interactiveElements.forEach(el => {
-        el.addEventListener('mouseenter', () => {
-            cursor.style.transform = 'scale(1.5)';
-            cursor.style.border = `2px solid ${rainbowColors[Math.floor(Math.random() * rainbowColors.length)]}`;
-            cursorFollower.style.transform = 'scale(1.5)';
-            cursorFollower.style.background = rainbowColors[Math.floor(Math.random() * rainbowColors.length)];
-            
-            // Create burst effect on hover
-            for (let i = 0; i < 8; i++) {
-                setTimeout(() => {
-                    createTrailElement();
-                }, i * 50);
-            }
-        });
-
-        el.addEventListener('mouseleave', () => {
-            cursor.style.transform = 'scale(1)';
-            cursor.style.border = '2px solid var(--accent-color)';
-            cursorFollower.style.transform = 'scale(1)';
-            cursorFollower.style.background = 'var(--accent-color)';
-        });
+    // Handle cursor size change on click
+    document.addEventListener('mousedown', () => {
+        cursor.style.transform = `translate3d(${cursorX}px, ${cursorY}px, 0) translate(-50%, -50%) scale(0.8)`;
+        cursorFollower.style.transform = `translate3d(${followerX}px, ${followerY}px, 0) translate(-50%, -50%) scale(0.6)`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+        cursor.style.transform = `translate3d(${cursorX}px, ${cursorY}px, 0) translate(-50%, -50%) scale(1)`;
+        cursorFollower.style.transform = `translate3d(${followerX}px, ${followerY}px, 0) translate(-50%, -50%) scale(1)`;
     });
 }
+*/
 
 // Custom Cursor
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize rainbow cursor effect
-    initRainbowCursorEffect();
+    // Comment out or remove the cursor effect initialization
+    // initRainbowCursorEffect();
     
     // Other existing initialization code...
 });
