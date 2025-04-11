@@ -1050,4 +1050,98 @@ document.addEventListener('DOMContentLoaded', () => {
     initRainbowCursorEffect();
     
     // Other existing initialization code...
-}); 
+});
+
+// Gallery Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const galleryItems = document.querySelectorAll('.gallery-item');
+    const indicators = document.querySelectorAll('.indicator');
+    const prevBtn = document.querySelector('.prev-btn');
+    const nextBtn = document.querySelector('.next-btn');
+    let currentIndex = 0;
+    let autoPlayInterval;
+    let autoPlayEnabled = true;
+    
+    // Initialize gallery
+    function initGallery() {
+        // Set initial active slide
+        updateGallery();
+        
+        // Add event listeners for prev button
+        prevBtn.addEventListener('click', () => {
+            pauseAutoPlay();
+            showPrevSlide();
+        });
+        
+        // Add event listeners for next button
+        nextBtn.addEventListener('click', () => {
+            pauseAutoPlay();
+            showNextSlide();
+        });
+        
+        // Add indicator click events
+        indicators.forEach((indicator, index) => {
+            indicator.addEventListener('click', () => {
+                pauseAutoPlay();
+                currentIndex = index;
+                updateGallery();
+            });
+        });
+        
+        // Start auto play gallery
+        startAutoPlay();
+    }
+    
+    // Start auto play
+    function startAutoPlay() {
+        if (autoPlayEnabled) {
+            autoPlayInterval = setInterval(showNextSlide, 1500);
+        }
+    }
+    
+    // Pause auto play
+    function pauseAutoPlay() {
+        autoPlayEnabled = false;
+        clearInterval(autoPlayInterval);
+    }
+    
+    // Update gallery state with fade transition
+    function updateGallery() {
+        // Reset all items
+        galleryItems.forEach((item) => {
+            // Remove active class to initiate fade out
+            item.classList.remove('active', 'previous');
+            
+            // Update styling for fade effect
+            item.style.opacity = '0';
+            item.style.left = '0';
+            item.style.transition = 'opacity 0.6s ease';
+        });
+        
+        // Set active item with fade in
+        galleryItems[currentIndex].style.opacity = '1';
+        galleryItems[currentIndex].classList.add('active');
+        
+        // Update indicators
+        indicators.forEach((indicator, index) => {
+            indicator.classList.toggle('active', index === currentIndex);
+        });
+    }
+    
+    // Show previous slide
+    function showPrevSlide() {
+        currentIndex = (currentIndex - 1 + galleryItems.length) % galleryItems.length;
+        updateGallery();
+    }
+    
+    // Show next slide
+    function showNextSlide() {
+        currentIndex = (currentIndex + 1) % galleryItems.length;
+        updateGallery();
+    }
+    
+    // Initialize when DOM is loaded
+    if (galleryItems.length > 0) {
+        initGallery();
+    }
+});
