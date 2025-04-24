@@ -1,4 +1,4 @@
-https://aponexe69.github.io/Protfolio-with-claude
+https://aponexe69.github.io/portfolio
 
 A modern, visually stunning advanced portfolio website using HTML, CSS, and JavaScript. The website include:
 
